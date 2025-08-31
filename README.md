@@ -1,4 +1,4 @@
-# ♟️ chessscore
+# ♟️ Chessscore
 
 Streamlit app to record chess games and compute ELO ratings for teams, with a real-time leaderboard.  
 Designed for small groups who want a simple, shareable way to track chess results.
