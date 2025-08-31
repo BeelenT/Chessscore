@@ -2,9 +2,6 @@ import pandas as pd
 import streamlit as st
 from sqlalchemy import create_engine, text
 
-
-SCHEMA = "chessscore"
-
 def get_engine():
     url = st.secrets.get("DB_URL")
     if not url:
@@ -17,26 +14,7 @@ def engine():
 
 def init_db():
     with engine().begin() as con:
-        # créer schéma + tables + index si absents
-        con.exec_driver_sql(f"create schema if not exists {SCHEMA};")
-        con.exec_driver_sql(f"""
-        create table if not exists {SCHEMA}.games(
-          id bigserial primary key,
-          date date not null,
-          white text not null,
-          black text not null,
-          result real not null check (result in (0, 0.5, 1))
-        );""")
-        con.exec_driver_sql(f"""
-        create table if not exists {SCHEMA}.players(
-          id bigserial primary key,
-          name text unique not null,
-          alias text
-        );""")
-        con.exec_driver_sql(f"create index if not exists games_date_idx  on {SCHEMA}.games(date);")
-        con.exec_driver_sql(f"create index if not exists games_white_idx on {SCHEMA}.games(white);")
-        con.exec_driver_sql(f"create index if not exists games_black_idx on {SCHEMA}.games(black);")
-        con.exec_driver_sql(f"create unique index if not exists games_uniq_triplet on {SCHEMA}.games(date, white, black);")
+        con.execute(text("set search_path to chessscore, public;"))
 
 def load_games() -> pd.DataFrame:
     q = "select date, white, black, result from chessscore.games order by date;"
