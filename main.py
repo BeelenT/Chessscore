@@ -13,57 +13,47 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from sqlalchemy import create_engine, text
+
 # --------------------
 # Constantes & stockage
 # --------------------
-DATA_DIR = "data"
-GAMES_CSV = os.path.join(DATA_DIR, "games.csv")
-PLAYERS_CSV = os.path.join(DATA_DIR, "players.csv")  # optionnel, pour alias
 
 DEFAULT_START_RATING = 1200
 DEFAULT_K = 20
 NEWBIE_GAMES = 10
 NEWBIE_K = 40
 
-os.makedirs(DATA_DIR, exist_ok=True)
-
 # --------------------
-# Helpers fichiers
+# Helpers database
 # --------------------
 
-def load_games() -> pd.DataFrame:
-    if os.path.exists(GAMES_CSV):
-        df = pd.read_csv(GAMES_CSV)
-        cols = {c.lower(): c for c in df.columns}
-        rename_map = {
-            cols.get("date", "date"): "date",
-            cols.get("white", "white"): "white",
-            cols.get("black", "black"): "black",
-            cols.get("result", "result"): "result",
-        }
-        df = df.rename(columns=rename_map)[["date", "white", "black", "result"]]
-        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
-        return df
-    else:
-        return pd.DataFrame(columns=["date", "white", "black", "result"])
+engine = create_engine(st.secrets["DB_URL"], pool_pre_ping=True)
 
+def init_db():
+    with engine.begin() as con:
+        con.execute(text("set search_path to chesssore, public;"))
 
-def save_games(df: pd.DataFrame) -> None:
-    df = df.copy()
-    df.to_csv(GAMES_CSV, index=False)
+def load_games():
+    return pd.read_sql("set search_path to chesssore, public; select date, white, black, result from games order by date;", engine)
 
+def save_game_row(date, white, black, result):
+    with engine.begin() as con:
+        con.execute(text("set search_path to chesssore, public;"))
+        con.execute(text("""
+            insert into games(date, white, black, result)
+            values (:d, :w, :b, :r)
+            on conflict (date, white, black) do update
+            set result = EXCLUDED.result;
+        """), {"d": str(date), "w": white, "b": black, "r": float(result)})
 
-def load_players() -> pd.DataFrame:
-    if os.path.exists(PLAYERS_CSV):
-        df = pd.read_csv(PLAYERS_CSV)
-        if "name" not in df.columns:
-            df = pd.DataFrame(columns=["name", "alias"])
-        return df
-    return pd.DataFrame(columns=["name", "alias"])
+def save_games(df: pd.DataFrame):
+    with engine.begin() as con:
+        con.execute(text("set search_path to chesssore, public; truncate table games;"))
+        df.to_sql("games", con.connection, if_exists="append", index=False, schema="chesssore")
 
+init_db()
 
-def save_players(df: pd.DataFrame) -> None:
-    df.to_csv(PLAYERS_CSV, index=False)
 
 # --------------------
 # ELO core
@@ -143,8 +133,8 @@ def compute_ratings(
         cw = counts.get(w, 0)
         cb = counts.get(b, 0)
 
-        k_w = NEWBIE_K if cw < newbie_games else base_k
-        k_b = NEWBIE_K if cb < newbie_games else base_k
+        k_w = newbie_k if cw < newbie_games else base_k
+        k_b = newbie_k if cb < newbie_games else base_k
 
         ew = expected_score(rw, rb_)
         rb_exp = 1.0 - ew
