@@ -25,7 +25,6 @@ def save_game_row(date, white, black, result):
         con.execute(text("""
             insert into chessscore.games(date, white, black, result)
             values (:d, :w, :b, :r)
-            on conflict (date, white, black) do update set result = EXCLUDED.result;
         """), {"d": str(date), "w": white, "b": black, "r": float(result)})
 
 def save_games_df(df: pd.DataFrame):
