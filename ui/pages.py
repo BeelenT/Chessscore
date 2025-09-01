@@ -25,11 +25,66 @@ def render_tab_saisie_histo(params: dict):
     def _load_games_cached(version: int):
         return load_games()
 
+    @st.cache_data(show_spinner=False)
+    def _load_players_cached(version: int):
+        return load_players()
+
     games_df = _load_games_cached(st.session_state.data_version)
+    players_df = _load_players_cached(st.session_state.data_version)
 
     # -------- Formulaire d'ajout : rerun uniquement au submit --------
     with st.form("form_add_game", clear_on_submit=True):
         st.subheader("Ajouter une partie")
+
+        # --- Ajout d'un joueur (un seul bouton) ---
+        st.session_state.setdefault("show_add_player", False)
+
+        col_add, _ = st.columns([1, 3])
+        with col_add:
+            if st.button("➕ Ajouter un joueur", key="btn_show_add_player"):
+                st.session_state.show_add_player = True
+
+        if st.session_state.show_add_player:
+            with st.form("form_add_player", clear_on_submit=True):
+                new_player = st.text_input("Nom du nouveau joueur", key="new_player_name", placeholder="Ex: Alice")
+                cpa, cpb = st.columns([1, 1])
+                with cpa:
+                    submitted_add_player = st.form_submit_button("Valider", type="primary")
+                with cpb:
+                    cancel_add_player = st.form_submit_button("Annuler")
+
+            # Annuler -> referme le panneau, rien d'autre
+            if 'cancel_add_player' in locals() and cancel_add_player:
+                st.session_state.show_add_player = False
+                st.stop()
+
+            # Valider -> validations + insertion + refresh
+            if 'submitted_add_player' in locals() and submitted_add_player:
+                name = (new_player or "").strip()
+                errors = []
+                if len(name) < 2:
+                    errors.append("Nom trop court (2 caractères minimum).")
+
+                # Unicité (casse comprise -> comparaison EXACTE)
+                dfp = load_players()
+                if "name" in dfp.columns and name in set(dfp["name"].astype(str)):
+                    errors.append(f"Le joueur « {name} » existe déjà.")
+
+                if errors:
+                    for e in errors: st.warning(e)
+                else:
+                    # Append puis sauvegarde (table players unique sur name)
+                    if "name" not in dfp.columns:
+                        dfp = pd.DataFrame(columns=["name", "alias"])
+                    dfp = pd.concat([dfp, pd.DataFrame([{"name": name, "alias": None}])], ignore_index=True)
+                    save_players_df(dfp)
+                    st.success(f"Joueur « {name} » ajouté.")
+
+                    # Fermer le panneau + invalider caches + recharger l'UI
+                    st.session_state.show_add_player = False
+                    st.session_state.data_version += 1
+                    st.rerun()
+
         c1, c2, c3 = st.columns(3)
 
         # options joueurs existants (à partir des données cachées)
