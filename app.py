@@ -38,17 +38,47 @@ if "elo_params" not in st.session_state:
     }
 params = st.session_state.elo_params
 
-# Sidebar leaderboard
-games_df = load_games()
-ratings_sidebar, _ = compute_ratings(
-    games_df,
-    start_rating=params["start_rating"],
-    base_k=params["base_k"],
-    newbie_games=params["newbie_games"],
-    newbie_k=params["newbie_k"],
-)
+# --- Cache & versioning des données ---
+if "data_version" not in st.session_state:
+    st.session_state.data_version = 0
+
+def bump_data_version():
+    st.session_state.data_version += 1
+
+@st.cache_data(show_spinner=False)
+def _load_games_cached(version: int):
+    # la clé 'version' invalide le cache après écriture
+    from db.repo import load_games
+    return load_games()
+
+@st.cache_data(show_spinner=False)
+def _compute_ratings_cached(games_df, params_tuple):
+    from core.elo import compute_ratings
+    start_rating, base_k, newbie_games, newbie_k = params_tuple
+    return compute_ratings(
+        games_df,
+        start_rating=start_rating,
+        base_k=base_k,
+        newbie_games=newbie_games,
+        newbie_k=newbie_k,
+    )
+
+def compute_cached_for_ui():
+    games_df = _load_games_cached(st.session_state.data_version)
+    params_tuple = (
+        st.session_state.elo_params["start_rating"],
+        st.session_state.elo_params["base_k"],
+        st.session_state.elo_params["newbie_games"],
+        st.session_state.elo_params["newbie_k"],
+    )
+    ratings, games_enriched = _compute_ratings_cached(games_df, params_tuple)
+    return games_df, ratings, games_enriched
+
+# --- Sidebar leaderboard (utilise le cache) ---
+games_df, ratings_sidebar, _ = compute_cached_for_ui()
 with st.sidebar:
     render_sidebar_leaderboard(ratings_sidebar)
+
 
 # Tabs
 tab_saisie_hist, tab_classement, tab_export, tab_params, tab_admin = st.tabs([

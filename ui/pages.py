@@ -17,35 +17,52 @@ def _existing_players() -> list[str]:
     return sorted(set(combined.astype(str).str.strip().unique()))
 
 def render_tab_saisie_histo(params: dict):
-    games_df = load_games()
-    st.subheader("Ajouter une partie")
-    c1, c2, c3 = st.columns(3)
-    options = ["<nouveau>"] + _existing_players()
-    with c1:
-        white = st.selectbox("Blancs", options=options, index=1 if len(options)>1 else 0)
-        if white == "<nouveau>":
-            white = st.text_input("Nom du joueur (Blancs)", key="white_new").strip()
-    with c2:
-        black = st.selectbox("Noirs", options=options, index=2 if len(options)>2 else 0)
-        if black == "<nouveau>":
-            black = st.text_input("Nom du joueur (Noirs)", key="black_new").strip()
-    with c3:
-        date_val = st.date_input("Date", value=datetime.today().date())
+    # petits helpers cache locaux (clé = data_version)
+    if "data_version" not in st.session_state:
+        st.session_state.data_version = 0
 
-    res_map = {"Blancs gagnent 1-0": 1.0, "Noirs gagnent 0-1": 0.0, "Nulle ½-½": 0.5}
-    res_label = st.radio("Résultat", list(res_map.keys()), horizontal=True)
-    result_val = res_map[res_label]
+    @st.cache_data(show_spinner=False)
+    def _load_games_cached(version: int):
+        return load_games()
 
-    valid = white and black and white != black
-    if not valid:
-        st.info("Sélectionnez deux joueurs distincts.")
+    games_df = _load_games_cached(st.session_state.data_version)
 
-    if st.button("Enregistrer la partie", type="primary", disabled=not valid):
+    # -------- Formulaire d'ajout : rerun uniquement au submit --------
+    with st.form("form_add_game", clear_on_submit=True):
+        st.subheader("Ajouter une partie")
+        c1, c2, c3 = st.columns(3)
+
+        # options joueurs existants (à partir des données cachées)
+        players_df = load_players()
+        combined = pd.concat([
+            games_df["white"], games_df["black"], players_df.get("name", pd.Series(dtype=str))
+        ], ignore_index=True).dropna()
+        existing = sorted(set(combined.astype(str).str.strip().unique()))
+        options = ["<nouveau>"] + existing
+
+        with c1:
+            white_sel = st.selectbox("Blancs", options=options, index=1 if len(options)>1 else 0)
+            white = st.text_input("Nom du joueur (Blancs)", key="white_new").strip() if white_sel=="<nouveau>" else white_sel
+        with c2:
+            black_sel = st.selectbox("Noirs", options=options, index=2 if len(options)>2 else 0)
+            black = st.text_input("Nom du joueur (Noirs)", key="black_new").strip() if black_sel=="<nouveau>" else black_sel
+        with c3:
+            date_val = st.date_input("Date", value=datetime.today().date())
+
+        res_map = {"Blancs gagnent 1-0": 1.0, "Noirs gagnent 0-1": 0.0, "Nulle ½-½": 0.5}
+        res_label = st.radio("Résultat", list(res_map.keys()), horizontal=True)
+        result_val = res_map[res_label]
+
+        valid = white and black and white != black
+        submitted_add = st.form_submit_button("Enregistrer la partie", type="primary", disabled=not valid)
+
+    if submitted_add:
         save_game_row(date_val, white.strip(), black.strip(), result_val)
         st.success("Partie ajoutée.")
+        st.session_state.data_version += 1   # invalide le cache
         st.rerun()
 
-    # Historique (émoticônes)
+    # -------- Historique (édition) --------
     st.subheader("Historique des parties")
     st.caption("Astuce: corrigez une ligne puis cliquez « Sauvegarder ».")
     st.markdown(
@@ -55,31 +72,39 @@ def render_tab_saisie_histo(params: dict):
 
     display_df = games_df.copy()
 
+    # masquer id côté UI (si présent)
+    column_order = ["date", "white", "black", "result"]
+    if "id" in display_df.columns:
+        # on garde 'id' pour la sauvegarde complète si tu veux, mais on ne l'affiche pas
+        pass
+
+    # mapping chiffres -> emojis pour l'affichage
     def _to_num_or_keep(x):
         try: return float(x)
         except Exception: return x
-
     display_df["result"] = display_df["result"].apply(_to_num_or_keep)
     display_df["result"] = display_df["result"].map({1.0:"⚪", 0.0:"⚫", 0.5:"🤝"}).fillna(display_df["result"])
 
-    edit_df = st.data_editor(
-        display_df,
-        num_rows="dynamic",
-        use_container_width=True,
-        column_order=["date", "white", "black", "result"],  # cache id
-        column_config={
-            "id": st.column_config.TextColumn("id", disabled=True),  # pas affiché si column_order défini
-            "date": st.column_config.DateColumn("date"),
-            "white": st.column_config.TextColumn("white"),
-            "black": st.column_config.TextColumn("black"),
-            "result": st.column_config.TextColumn("result", help="⚪=Blancs, ⚫=Noirs, 🤝=Nulle (1/0/0.5)"),
-        },
-        key="editor_games",
-    )
+    with st.form("form_save_history"):
+        edit_df = st.data_editor(
+            display_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            column_order=column_order,
+            column_config={
+                "date":  st.column_config.DateColumn("date"),
+                "white": st.column_config.TextColumn("white"),
+                "black": st.column_config.TextColumn("black"),
+                "result":st.column_config.TextColumn("result", help="⚪=Blancs, ⚫=Noirs, 🤝=Nulle (1/0/0.5 acceptés)"),
+            },
+            key="editor_games",
+        )
+        submitted_hist = st.form_submit_button("Sauvegarder l'historique")
 
-    if st.button("Sauvegarder l'historique"):
+    if submitted_hist:
         df_save = edit_df.copy()
 
+        # conversion inverse emojis/texte vers 1.0 / 0.0 / 0.5
         def convert_result(val):
             if pd.isna(val): return np.nan
             s = str(val).strip().lower()
@@ -94,9 +119,13 @@ def render_tab_saisie_histo(params: dict):
 
         df_save["result"] = df_save["result"].apply(convert_result)
         df_save["date"] = pd.to_datetime(df_save["date"], errors="coerce").dt.date
+
+        # réécrit tout l'historique (comme avant)
         save_games_df(df_save)
         st.success("Sauvegardé.")
+        st.session_state.data_version += 1   # invalide le cache
         st.rerun()
+
 
 def render_tab_classement(params: dict):
     games_df = load_games()
@@ -113,28 +142,47 @@ def render_tab_classement(params: dict):
         st.dataframe(games_enriched, use_container_width=True)
 
 def render_tab_export(params: dict):
-    games_df = load_games()
-    ratings, games_enriched = compute_ratings(
-        games_df,
-        start_rating=params["start_rating"],
-        base_k=params["base_k"],
-        newbie_games=params["newbie_games"],
-        newbie_k=params["newbie_k"],
-    )
-    st.subheader("Exporter vers Excel (XLSX)")
-    buf = BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        ratings.to_excel(writer, index=False, sheet_name="Classement")
-        games_enriched.to_excel(writer, index=False, sheet_name="Historique")
-        pd.DataFrame({"date":[datetime.today().date()], "white":["Alice"], "black":["Bob"], "result":[1.0]}).to_excel(
-            writer, index=False, sheet_name="TemplatePartie"
+    if "data_version" not in st.session_state:
+        st.session_state.data_version = 0
+
+    @st.cache_data(show_spinner=False)
+    def _load_games_cached(version: int):
+        return load_games()
+
+    @st.cache_data(show_spinner=False)
+    def _compute_ratings_cached(games_df, params_tuple):
+        return compute_ratings(
+            games_df,
+            start_rating=params_tuple[0],
+            base_k=params_tuple[1],
+            newbie_games=params_tuple[2],
+            newbie_k=params_tuple[3],
         )
-    st.download_button(
-        label="Télécharger le fichier Excel",
-        data=buf.getvalue(),
-        file_name="chessscore_export.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+
+    st.subheader("Exporter vers Excel (XLSX)")
+
+    if st.button("Préparer le fichier"):
+        games_df = _load_games_cached(st.session_state.data_version)
+        params_tuple = (params["start_rating"], params["base_k"], params["newbie_games"], params["newbie_k"])
+        ratings, games_enriched = _compute_ratings_cached(games_df, params_tuple)
+
+        buf = BytesIO()
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            ratings.to_excel(writer, index=False, sheet_name="Classement")
+            games_enriched.to_excel(writer, index=False, sheet_name="Historique")
+            pd.DataFrame({"date":[datetime.today().date()], "white":["Alice"], "black":["Bob"], "result":[1.0]}).to_excel(
+                writer, index=False, sheet_name="TemplatePartie"
+            )
+        st.session_state["last_export"] = buf.getvalue()
+
+    if "last_export" in st.session_state:
+        st.download_button(
+            label="Télécharger le fichier Excel",
+            data=st.session_state["last_export"],
+            file_name="chessscore_export.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
 
 def render_tab_params(params: dict):
     st.subheader("Paramètres ELO")
