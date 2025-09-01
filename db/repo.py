@@ -17,8 +17,9 @@ def init_db():
         con.execute(text("set search_path to chessscore, public;"))
 
 def load_games() -> pd.DataFrame:
-    q = "select date, white, black, result from chessscore.games order by date;"
+    q = "select id, date, white, black, result from chessscore.games order by date desc, id desc"
     return pd.read_sql(q, engine())
+
 
 def save_game_row(date, white, black, result):
     with engine().begin() as con:

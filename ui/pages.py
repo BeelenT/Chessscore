@@ -66,11 +66,13 @@ def render_tab_saisie_histo(params: dict):
         display_df,
         num_rows="dynamic",
         use_container_width=True,
+        column_order=["date", "white", "black", "result"],  # cache id
         column_config={
-            "date":  st.column_config.DateColumn("date"),
+            "id": st.column_config.TextColumn("id", disabled=True),  # pas affiché si column_order défini
+            "date": st.column_config.DateColumn("date"),
             "white": st.column_config.TextColumn("white"),
             "black": st.column_config.TextColumn("black"),
-            "result":st.column_config.TextColumn("result", help="⚪=Blancs, ⚫=Noirs, 🤝=Nulle (1/0/0.5 acceptés)")
+            "result": st.column_config.TextColumn("result", help="⚪=Blancs, ⚫=Noirs, 🤝=Nulle (1/0/0.5)"),
         },
         key="editor_games",
     )
