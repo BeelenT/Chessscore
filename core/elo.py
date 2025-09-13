@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import streamlit as st
 
 def expected_score(ra: float, rb: float) -> float:
     return 1.0 / (1.0 + 10 ** ((rb - ra) / 400.0))
@@ -9,6 +10,7 @@ def update_elo(ra: float, rb: float, sa: float, k: float) -> tuple[float, float]
     eb = 1.0 - ea
     return ra + k * (sa - ea), rb + k * ((1.0 - sa) - eb)
 
+@st.cache_data(show_spinner=False)
 def compute_ratings(
     games: pd.DataFrame,
     start_rating: int,

@@ -1,15 +1,11 @@
 # app.py — Chessscore
 import streamlit as st
 from db.repo import init_db, load_games
+
 from core.elo import compute_ratings
 from ui.components import render_sidebar_leaderboard
-from ui.pages import (
-    render_tab_saisie_histo,
-    render_tab_classement,
-    render_tab_export,
-    render_tab_params,
-    render_tab_admin,
-)
+from ui.pages import render_tab_saisie_histo, render_tab_classement, render_tab_export, render_tab_params, render_tab_admin
+
 
 # Constantes par défaut
 DEFAULT_START_RATING = 1200
@@ -45,33 +41,12 @@ if "data_version" not in st.session_state:
 def bump_data_version():
     st.session_state.data_version += 1
 
-@st.cache_data(show_spinner=False)
-def _load_games_cached(version: int):
-    # la clé 'version' invalide le cache après écriture
-    from db.repo import load_games
-    return load_games()
-
-@st.cache_data(show_spinner=False)
-def _compute_ratings_cached(games_df, params_tuple):
-    from core.elo import compute_ratings
-    start_rating, base_k, newbie_games, newbie_k = params_tuple
-    return compute_ratings(
-        games_df,
-        start_rating=start_rating,
-        base_k=base_k,
-        newbie_games=newbie_games,
-        newbie_k=newbie_k,
-    )
-
 def compute_cached_for_ui():
-    games_df = _load_games_cached(st.session_state.data_version)
-    params_tuple = (
-        st.session_state.elo_params["start_rating"],
-        st.session_state.elo_params["base_k"],
-        st.session_state.elo_params["newbie_games"],
-        st.session_state.elo_params["newbie_k"],
-    )
-    ratings, games_enriched = _compute_ratings_cached(games_df, params_tuple)
+    games_df = load_games(st.session_state.data_version)
+    ratings, games_enriched = compute_ratings(games_df, st.session_state.elo_params["start_rating"],
+                                                        st.session_state.elo_params["base_k"],
+                                                        st.session_state.elo_params["newbie_games"],
+                                                        st.session_state.elo_params["newbie_k"],)
     return games_df, ratings, games_enriched
 
 # --- Sidebar leaderboard (utilise le cache) ---

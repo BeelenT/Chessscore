@@ -17,20 +17,11 @@ def _existing_players() -> list[str]:
     return sorted(set(combined.astype(str).str.strip().unique()))
 
 def render_tab_saisie_histo(params: dict):
-    # petits helpers cache locaux (clé = data_version)
     if "data_version" not in st.session_state:
         st.session_state.data_version = 0
 
-    @st.cache_data(show_spinner=False)
-    def _load_games_cached(version: int):
-        return load_games()
-
-    @st.cache_data(show_spinner=False)
-    def _load_players_cached(version: int):
-        return load_players()
-
-    games_df = _load_games_cached(st.session_state.data_version)
-    players_df = _load_players_cached(st.session_state.data_version)
+    games_df = load_games(st.session_state.data_version)
+    players_df = load_players(st.session_state.data_version)
 
     # --- Ajout d'un joueur (un seul bouton) ---
     st.session_state.setdefault("show_add_player", False)
@@ -200,26 +191,12 @@ def render_tab_export(params: dict):
     if "data_version" not in st.session_state:
         st.session_state.data_version = 0
 
-    @st.cache_data(show_spinner=False)
-    def _load_games_cached(version: int):
-        return load_games()
-
-    @st.cache_data(show_spinner=False)
-    def _compute_ratings_cached(games_df, params_tuple):
-        return compute_ratings(
-            games_df,
-            start_rating=params_tuple[0],
-            base_k=params_tuple[1],
-            newbie_games=params_tuple[2],
-            newbie_k=params_tuple[3],
-        )
-
     st.subheader("Exporter vers Excel (XLSX)")
 
     if st.button("Préparer le fichier"):
-        games_df = _load_games_cached(st.session_state.data_version)
-        params_tuple = (params["start_rating"], params["base_k"], params["newbie_games"], params["newbie_k"])
-        ratings, games_enriched = _compute_ratings_cached(games_df, params_tuple)
+        games_df = load_games(st.session_state.data_version)
+        ratings, games_enriched = compute_ratings(games_df, params["start_rating"], params["base_k"],
+                                                            params["newbie_games"], params["newbie_k"])
 
         buf = BytesIO()
         with pd.ExcelWriter(buf, engine="openpyxl") as writer:

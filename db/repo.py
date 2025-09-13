@@ -16,7 +16,8 @@ def init_db():
     with engine().begin() as con:
         con.execute(text("set search_path to chessscore, public;"))
 
-def load_games() -> pd.DataFrame:
+@st.cache_data(show_spinner=False)
+def load_games(version: int) -> pd.DataFrame:
     q = "select id, date, white, black, result from chessscore.games order by date desc, id desc"
     return pd.read_sql(q, engine())
 
@@ -34,7 +35,8 @@ def save_games_df(df: pd.DataFrame):
         df.to_sql("games", con.connection, if_exists="append", index=False, schema="chessscore")
 
 # Players (optionnel)
-def load_players() -> pd.DataFrame:
+@st.cache_data(show_spinner=False)
+def load_players(version: int) -> pd.DataFrame:
     q = "select name, alias from chessscore.players order by name;"
     try:
         return pd.read_sql(q, engine())
