@@ -55,26 +55,26 @@ with st.sidebar:
     render_sidebar_leaderboard(ratings_sidebar)
 
 
-# Tabs
-tab_saisie_hist, tab_classement, tab_export, tab_params, tab_admin = st.tabs([
-    "Saisir / Historique",
-    "Classement",
-    "Export",
-    "Paramètres",
-    "Admin",
-])
+# # Tabs
+# tab_saisie_hist, tab_classement, tab_export, tab_params, tab_admin = st.tabs([
+#     "Saisir / Historique",
+#     "Classement",
+#     "Export",
+#     "Paramètres",
+#     "Admin",
+# ])
 
-with tab_saisie_hist:
-    render_tab_saisie_histo(params)
+# with tab_saisie_hist:
+#     render_tab_saisie_histo(params)
 
-with tab_classement:
-    render_tab_classement(params)
+# with tab_classement:
+#     render_tab_classement(params)
 
-with tab_export:
-    render_tab_export(params)
+# with tab_export:
+#     render_tab_export(params)
 
-with tab_params:
-    render_tab_params(params)
+# with tab_params:
+#     render_tab_params(params)
 
-with tab_admin:
-    render_tab_admin()
+# with tab_admin:
+#     render_tab_admin()
