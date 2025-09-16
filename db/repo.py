@@ -16,7 +16,7 @@ def init_db():
     with engine().begin() as con:
         con.execute(text("set search_path to chessscore, public;"))
 
-@st.cache_data(show_spinner=False)
+# @st.cache_data(show_spinner=False)
 def load_games(version: int) -> pd.DataFrame:
     q = "select id, date, white, black, result from chessscore.games order by date desc, id desc"
     return pd.read_sql(q, engine())
